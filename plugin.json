@@ -1,0 +1,21 @@
+{
+    "id": "dmsSessionizer",
+    "name": "DMS Sessionizer",
+    "description": "Create tmux sessions for your projects",
+    "author": "leonardofranco01",
+    "version": "1.0.0",
+    "icon": "terminal",
+    "type": "launcher",
+    "capabilities": [
+        "command-execution",
+        "shell"
+    ],
+    "component": "./dmsSessionizer.qml",
+    "settings": "./dmsSessionizerSettings.qml",
+    "requires_dms": ">=1.2.0",
+    "trigger": "tm",
+    "permissions": [
+        "settings_read",
+        "settings_write"
+    ]
+}
