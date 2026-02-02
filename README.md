@@ -2,18 +2,18 @@
 
 ![Preview of the plugin](./assets/screenshot.png)
 
-A DankMaterialShell launcher plugin that creates tmux sessions for your projects from anywhere inside your workspaces. Quickly open any project folder in a terminal with a dedicated tmux session named after the project/directory.
+A DankMaterialShell launcher plugin that creates tmux sessions for your projects from anywhere inside your workspaces. Quickly open any project directory in a terminal with a dedicated tmux session named after the project/directory.
 
 Inspired by Primeagen's tmux-sessionizer and tonybanters's dmenu-scripts.
 
 ## Features
 
-- **Quick Project Access** - Browse all folders in your projects directories from the launcher
+- **Quick Project Access** - Browse all subdirectories in your projects directories from the launcher
 - **Multiple Directories** - Search across multiple project directories at once
 - **Automatic Tmux Sessions** - Creates a new tmux session named after the selected project
 - **Smart Session Handling** - Attaches to existing sessions instead of creating duplicates
 - **Multiple Terminal Support** - Works with st, alacritty, kitty, wezterm, foot, konsole, gnome-terminal, xterm, ghostty, or any custom terminal
-- **Configurable Projects Directory** - Set any folders as your projects roots (default: `~/projects`)
+- **Configurable Projects Directory** - Set any directory as your projects roots (default: `~/projects`)
 - **Flexible Terminal Behavior** - Open new windows, kill existing terminals, or reuse existing tmux sessions
 - **Fuzzy Search** - Filter projects by typing any part of the name or path
 
@@ -45,7 +45,7 @@ Visit [danklinux.com/plugins](https://danklinux.com/plugins) for the full plugin
 
 ```bash
 # Clone the plugin repo to DMS plugins directory
-git clone https://github.com/leonardofracno01/dms-sessionizer ~/.config/DankMaterialShell/plugins/dms-sessionizer
+git clone https://github.com/leonardofranco01/dms-sessionizer ~/.config/DankMaterialShell/plugins/dms-sessionizer
 
 # Enable in DMS
 # 1. Open Settings
@@ -77,7 +77,7 @@ git clone https://github.com/leonardofracno01/dms-sessionizer ~/.config/DankMate
 1. Plugin checks if a tmux session with that name already exists
 2. If session exists → attaches to it
 3. If session doesn't exist → creates new session with:
-    - Session name = folder name
+    - Session name = subdirectory name
     - Working directory = project path
 4. Opens your configured terminal with the tmux session
 
@@ -87,13 +87,14 @@ Access settings via DMS Settings → Plugins → DMS Sessionizer:
 
 ### Projects Directories
 
-- **Directory Paths**: Paths to your projects folders, separated by commas
+- **Directory Paths**: Paths to your projects directory, separated by commas
     - Supports absolute paths: `/home/user/code`
     - Supports `~` expansion: `~/projects`
     - Supports relative to home: `repos` → `~/repos`
     - Multiple directories: `~/projects, ~/work, ~/code`
     - Default: `~/projects`
 - **Include Hidden Directories**: When enabled, includes directories that start with a dot (e.g., `.config`, `.local`)
+- **Include Symlinked Directories**: When enabled, follows symbolic links and includes symlinked directories
 
 ### Terminal Settings
 
@@ -170,7 +171,7 @@ Found a bug or want to add a feature? Open an issue or submit a pull request at 
 
 - [ThePrimeagen/tmux-sessionizer](https://github.com/ThePrimeagen/tmux-sessionizer) - The original tmux-sessionizer script for quickly switching between projects
 - [tonybanters/dmenu-scripts](https://github.com/tonybanters/dmenu-scripts) - Tmux session management with dmenu/rofi
-- [sr-tream/dms-vscode-launcher](https://github.com/sr-tream/dms-vscode-launcher) - A DMS launcher plugin that provides quick access to VS Code projects, folders, and more.
+- [sr-tream/dms-vscode-launcher](https://github.com/sr-tream/dms-vscode-launcher) - A DMS launcher plugin that provides quick access to VS Code projects, directories, and more.
 
 ## License
 
