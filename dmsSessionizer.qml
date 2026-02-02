@@ -16,6 +16,7 @@ QtObject {
     property string terminal: "st"
     property string customTerminal: ""
     property string terminalBehavior: "newWindow"
+    property bool includeHidden: false
     property int maxResults: 50
 
     // Cached data
@@ -23,6 +24,8 @@ QtObject {
 
     // Raw data from process
     property string projectsRawData: ""
+    property var pendingDirs: []
+    property int currentDirIndex: 0
 
     // Home directory
     property string homeDir: Quickshell.env("HOME") || "/home"
@@ -62,13 +65,11 @@ QtObject {
         }
 
         onExited: function(exitCode) {
-            if (exitCode === 0) {
-                root.parseProjectsData();
-            } else {
-                console.warn("DMS Sessionizer: Failed to list projects directory, exit code:", exitCode);
-                root.cachedProjects = [];
-                root.itemsChanged();
+            if (exitCode !== 0) {
+                console.warn("DMS Sessionizer: Failed to list directory:", root.pendingDirs[root.currentDirIndex], "exit code:", exitCode);
             }
+            root.currentDirIndex++;
+            root.scanNextDirectory();
         }
     }
 
@@ -136,22 +137,36 @@ QtObject {
             terminal = pluginService.loadPluginData("dmsSessionizer", "terminal", "st");
             customTerminal = pluginService.loadPluginData("dmsSessionizer", "customTerminal", "");
             terminalBehavior = pluginService.loadPluginData("dmsSessionizer", "terminalBehavior", "newWindow");
+            includeHidden = pluginService.loadPluginData("dmsSessionizer", "includeHidden", false);
             var maxResultsStr = pluginService.loadPluginData("dmsSessionizer", "maxResults", "50");
             maxResults = parseInt(maxResultsStr, 10) || 50;
         }
     }
 
-    function getProjectsDir() {
-        if (projectsDir && projectsDir.length > 0) {
-            if (projectsDir.indexOf("/") === 0) {
-                return projectsDir;
+    function getProjectsDirs() {
+        var dirs = [];
+        var input = projectsDir && projectsDir.length > 0 ? projectsDir : "~/projects";
+        var parts = input.split(/[,\n]+/);
+        
+        for (var i = 0; i < parts.length; i++) {
+            var dir = parts[i].trim();
+            if (!dir) continue;
+            
+            if (dir.indexOf("/") === 0) {
+                dirs.push(dir);
+            } else if (dir.indexOf("~") === 0) {
+                dirs.push(homeDir + dir.substring(1));
+            } else {
+                dirs.push(homeDir + "/" + dir);
             }
-            if (projectsDir.indexOf("~") === 0) {
-                return homeDir + projectsDir.substring(1);
-            }
-            return homeDir + "/" + projectsDir;
         }
-        return homeDir + "/projects";
+        
+        return dirs.length > 0 ? dirs : [homeDir + "/projects"];
+    }
+
+    function getProjectsDir() {
+        var dirs = getProjectsDirs();
+        return dirs[0] || homeDir + "/projects";
     }
 
     function getTerminalExecutable() {
@@ -168,12 +183,32 @@ QtObject {
     }
 
     function refreshCache() {
-        // Clear accumulated data before reading
         projectsRawData = "";
+        cachedProjects = [];
+        pendingDirs = getProjectsDirs();
+        currentDirIndex = 0;
         
-        var dir = getProjectsDir();
-        // Use find to list only directories (excluding hidden ones)
-        listDirProcess.command = ["find", dir, "-maxdepth", "1", "-mindepth", "1", "-type", "d", "-not", "-name", ".*"];
+        if (pendingDirs.length > 0) {
+            scanNextDirectory();
+        } else {
+            itemsChanged();
+        }
+    }
+
+    function scanNextDirectory() {
+        if (currentDirIndex >= pendingDirs.length) {
+            parseProjectsData();
+            return;
+        }
+        
+        var dir = pendingDirs[currentDirIndex];
+        var cmd = ["find", dir, "-maxdepth", "1", "-mindepth", "1", "-type", "d"];
+        if (!includeHidden) {
+            cmd.push("-not");
+            cmd.push("-name");
+            cmd.push(".*");
+        }
+        listDirProcess.command = cmd;
         listDirProcess.running = true;
     }
 
@@ -290,7 +325,7 @@ QtObject {
 
         items.push({
             name: "↻ Refresh Projects",
-            comment: "Reload the projects list from " + shortenPath(getProjectsDir()),
+            comment: "Reload projects from " + getProjectsDirs().length + " director" + (getProjectsDirs().length === 1 ? "y" : "ies"),
             action: "refresh",
             icon: "material:refresh",
             categories: ["DMS Sessionizer"]

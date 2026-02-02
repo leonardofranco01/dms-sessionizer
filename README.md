@@ -8,11 +8,12 @@ Inspired by Primeagen's tmux-sessionizer and tonybanters's dmenu-scripts.
 
 ## Features
 
-- **Quick Project Access** - Browse all folders in your projects directory from the launcher
+- **Quick Project Access** - Browse all folders in your projects directories from the launcher
+- **Multiple Directories** - Search across multiple project directories at once
 - **Automatic Tmux Sessions** - Creates a new tmux session named after the selected project
 - **Smart Session Handling** - Attaches to existing sessions instead of creating duplicates
 - **Multiple Terminal Support** - Works with st, alacritty, kitty, wezterm, foot, konsole, gnome-terminal, xterm, ghostty, or any custom terminal
-- **Configurable Projects Directory** - Set any folder as your projects root (default: `~/projects`)
+- **Configurable Projects Directory** - Set any folders as your projects roots (default: `~/projects`)
 - **Flexible Terminal Behavior** - Open new windows, kill existing terminals, or reuse existing tmux sessions
 - **Fuzzy Search** - Filter projects by typing any part of the name or path
 
@@ -84,13 +85,15 @@ git clone https://github.com/leonardofracno01/dms-sessionizer ~/.config/DankMate
 
 Access settings via DMS Settings → Plugins → DMS Sessionizer:
 
-### Projects Directory
+### Projects Directories
 
-- **Directory Path**: Path to your projects folder
+- **Directory Paths**: Paths to your projects folders, separated by commas
     - Supports absolute paths: `/home/user/code`
     - Supports `~` expansion: `~/projects`
     - Supports relative to home: `repos` → `~/repos`
+    - Multiple directories: `~/projects, ~/work, ~/code`
     - Default: `~/projects`
+- **Include Hidden Directories**: When enabled, includes directories that start with a dot (e.g., `.config`, `.local`)
 
 ### Terminal Settings
 
@@ -128,7 +131,7 @@ Access settings via DMS Settings → Plugins → DMS Sessionizer:
 
 The plugin:
 
-1. Scans the configured projects directory for subdirectories
+1. Scans the configured projects directories for subdirectories
 2. Displays them in the launcher with fuzzy search
 3. On selection, runs: `tmux new-session -As <project-name> -c <project-path>`
 4. The `-A` flag makes tmux attach if session exists, or create if it doesn't
@@ -137,8 +140,8 @@ The plugin:
 
 ### No projects showing
 
-- Verify your projects directory exists and contains subdirectories
-- Check the directory path in settings (try absolute path)
+- Verify your projects directories exist and contain subdirectories
+- Check the directory paths in settings (try absolute paths)
 - Use the "↻ Refresh Projects" option in the launcher
 
 ### Terminal not launching
