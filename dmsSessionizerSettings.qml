@@ -17,7 +17,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "Quickly open project folders in a terminal with dedicated tmux sessions. Select a project and it will launch your terminal with a tmux session named after the project. Inspired by ThePrimeagen's tmux-sessionizer and tonybanters's dmenu-scripts."
+        text: "Quickly open project directories in a terminal with dedicated tmux sessions. Select a project and it will launch your terminal with a tmux session named after the project. Inspired by ThePrimeagen's tmux-sessionizer and tonybanters's dmenu-scripts."
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.surfaceVariantText
         wrapMode: Text.WordWrap
@@ -42,7 +42,7 @@ PluginSettings {
         id: projectsDirSetting
         settingKey: "projectsDir"
         label: "Directory Paths"
-        description: "Paths to your project folders, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
+        description: "Paths to your project directories, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
         placeholder: "~/projects, ~/work, ~/code"
         defaultValue: ""
     }
@@ -52,6 +52,14 @@ PluginSettings {
         settingKey: "includeHidden"
         label: "Include Hidden Directories"
         description: "Include directories that start with a dot (e.g., .config, .local)"
+        defaultValue: false
+    }
+
+    ToggleSetting {
+        id: includeSymlinksSetting
+        settingKey: "includeSymlinks"
+        label: "Include Symlinked Directories"
+        description: "Follow symbolic links and include symlinked directories"
         defaultValue: false
     }
 
@@ -247,9 +255,9 @@ PluginSettings {
 
         Repeater {
             model: [
-                "• Lists all folders in your projects directories",
-                "• Creates a tmux session named after the folder",
-                "• Sets the working directory to the project folder",
+                "• Lists all subdirectories in your projects directories",
+                "• Creates a tmux session named after the subdirectory selected",
+                "• Sets the working directory to the project directory",
                 "• Attaches to existing sessions automatically"
             ]
 

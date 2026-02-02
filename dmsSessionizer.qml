@@ -17,6 +17,7 @@ QtObject {
     property string customTerminal: ""
     property string terminalBehavior: "newWindow"
     property bool includeHidden: false
+    property bool includeSymlinks: false
     property int maxResults: 50
 
     // Cached data
@@ -138,6 +139,7 @@ QtObject {
             customTerminal = pluginService.loadPluginData("dmsSessionizer", "customTerminal", "");
             terminalBehavior = pluginService.loadPluginData("dmsSessionizer", "terminalBehavior", "newWindow");
             includeHidden = pluginService.loadPluginData("dmsSessionizer", "includeHidden", false);
+            includeSymlinks = pluginService.loadPluginData("dmsSessionizer", "includeSymlinks", false);
             var maxResultsStr = pluginService.loadPluginData("dmsSessionizer", "maxResults", "50");
             maxResults = parseInt(maxResultsStr, 10) || 50;
         }
@@ -202,7 +204,17 @@ QtObject {
         }
         
         var dir = pendingDirs[currentDirIndex];
-        var cmd = ["find", dir, "-maxdepth", "1", "-mindepth", "1", "-type", "d"];
+        var cmd = ["find"];
+        if (includeSymlinks) {
+            cmd.push("-L");
+        }
+        cmd.push(dir);
+        cmd.push("-maxdepth");
+        cmd.push("1");
+        cmd.push("-mindepth");
+        cmd.push("1");
+        cmd.push("-type");
+        cmd.push("d");
         if (!includeHidden) {
             cmd.push("-not");
             cmd.push("-name");
@@ -350,6 +362,10 @@ QtObject {
         if (actionType === "session") {
             var projectPath = actionData;
             var sessionName = getBasename(projectPath);
+            
+            if (sessionName.indexOf(".") === 0 && sessionName.length > 1) {
+                sessionName = sessionName.substring(1);
+            }
 
             if (terminalBehavior === "killExisting") {
                 var termExe = getTerminalExecutable();
