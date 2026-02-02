@@ -38,13 +38,32 @@ PluginSettings {
         color: Theme.surfaceText
     }
 
-    StringSetting {
-        id: projectsDirSetting
-        settingKey: "projectsDir"
-        label: "Directory Paths"
-        description: "Paths to your project directories, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
-        placeholder: "~/projects, ~/work, ~/code"
-        defaultValue: ""
+
+    Column {
+        width: parent.width
+        spacing: 5
+
+        StyledText { 
+            text: "Directory Paths" 
+        }
+
+        StyledText {
+            width: parent.width
+            text: "Paths to your project directories, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.surfaceVariantText
+            wrapMode: Text.WordWrap
+        }
+
+        DankTextField {
+            width: parent.width
+            text: root.loadValue("projectsDir", "") 
+            placeholderText: "~/projects, ~/work, ~/code"
+            onEditingFinished: {
+                root.saveValue("projectsDir", text);
+            }
+        }
+
     }
 
     ToggleSetting {
@@ -101,14 +120,32 @@ PluginSettings {
         }
     }
 
-    StringSetting {
-        id: customTerminalSetting
+    Column {
+        width: parent.width
         visible: terminalDropdown.currentValue === "Custom"
-        settingKey: "customTerminal"
-        label: "Custom Terminal"
-        description: "Command or path to the terminal executable"
-        placeholder: "my-terminal"
-        defaultValue: ""
+        spacing: 5
+
+        StyledText { 
+            text: "Custom Terminal" 
+        }
+
+        StyledText {
+            width: parent.width
+            text: "Command or path to the terminal executable"
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.surfaceVariantText
+            wrapMode: Text.WordWrap
+        }
+
+        DankTextField {
+            width: parent.width
+            text: root.loadValue("customTerminal", "") 
+            placeholderText: "my-terminal"
+            onEditingFinished: {
+                root.saveValue("customTerminal", text);
+            }
+        }
+
     }
 
     DankDropdown {
@@ -162,25 +199,63 @@ PluginSettings {
         id: noTriggerToggle
         settingKey: "noTrigger"
         label: "Always Active"
-        description: value ? "Items will always show in the launcher (no trigger needed)." : "Set the trigger text to activate this plugin."
+        description: noTriggerToggle.value ? "Items will always show in the launcher (no trigger needed)." : "Set the trigger text to activate this plugin."
         defaultValue: false
-        onValueChanged: {
-            if (value) {
+    }
+
+    Connections {
+        target: noTriggerToggle
+
+        function onValueChanged() {
+            if (!noTriggerToggle.isInitialized)
+                return;
+
+            if (noTriggerToggle.value) {
+                const current = triggerField.text || root.loadValue("trigger", "tm") || "tm";
+                if (current !== "") {
+                    root.saveValue("savedTrigger", current);
+                }
                 root.saveValue("trigger", "");
-            } else {
-                root.saveValue("trigger", triggerSetting.value || "tm");
+                triggerField.text = "";
+                return;
             }
+
+            const restored = root.loadValue("savedTrigger", "tm") || "tm";
+            root.saveValue("trigger", restored);
+            triggerField.text = restored;
         }
     }
 
-    StringSetting {
-        id: triggerSetting
+    Column {
+        width: parent.width
         visible: !noTriggerToggle.value
-        settingKey: "trigger"
-        label: "Trigger"
-        description: "Examples: tm, tmux, sess, etc."
-        placeholder: "tm"
-        defaultValue: "tm"
+        spacing: 5
+
+        StyledText { 
+            text: "Trigger" 
+        }
+
+        StyledText {
+            width: parent.width
+            text: "Examples: tm, tmux, sess, etc."
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.surfaceVariantText
+            wrapMode: Text.WordWrap
+        }
+
+        DankTextField {
+            id: triggerField
+            width: parent.width
+            text: root.loadValue("trigger", "tm")
+            placeholderText: "tm"
+            onEditingFinished: {
+                root.saveValue("trigger", text);
+                if (text !== "") {
+                    root.saveValue("savedTrigger", text);
+                }
+            }
+        }
+
     }
 
     Rectangle {
@@ -190,13 +265,41 @@ PluginSettings {
         opacity: 0.3
     }
 
-    StringSetting {
-        id: maxResultsSetting
-        settingKey: "maxResults"
-        label: "Max Results"
-        description: "Maximum number of projects to display (10-200)."
-        placeholder: "50"
-        defaultValue: "50"
+    Column {
+        width: parent.width
+        spacing: 5
+
+        StyledText { 
+            text: "Max Results" 
+        }
+
+        StyledText {
+            width: parent.width
+            text: "Maximum number of projects to display (10-200)."
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.surfaceVariantText
+            wrapMode: Text.WordWrap
+        }
+
+        DankTextField {
+            id: maxResultsField
+            width: parent.width
+            text: root.loadValue("maxResults", "50")
+            placeholderText: "50"
+            validator: IntValidator {
+                bottom: 0
+            }
+            onEditingFinished: {
+                const parsed = parseInt(text, 10);
+                const value = isNaN(parsed) ? 0 : Math.max(0, parsed);
+                const sanitized = String(value);
+                if (maxResultsField.text !== sanitized) {
+                    maxResultsField.text = sanitized;
+                }
+                root.saveValue("maxResults", sanitized);
+            }
+        }
+
     }
 
     Rectangle {
