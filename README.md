@@ -13,7 +13,7 @@ Inspired by Primeagen's tmux-sessionizer and tonybanters's dmenu-scripts.
 - **Smart Session Handling** - Attaches to existing sessions instead of creating duplicates
 - **Multiple Terminal Support** - Works with st, alacritty, kitty, wezterm, foot, konsole, gnome-terminal, xterm, ghostty, or any custom terminal
 - **Configurable Projects Directory** - Set any folder as your projects root (default: `~/projects`)
-- **Optional Terminal Kill** - Optionally kill existing terminal instances before launching (single-terminal workflow)
+- **Flexible Terminal Behavior** - Open new windows, kill existing terminals, or reuse existing tmux sessions
 - **Fuzzy Search** - Filter projects by typing any part of the name or path
 
 ## Installation
@@ -98,7 +98,10 @@ Access settings via DMS Settings → Plugins → DMS Sessionizer:
     - st, alacritty, kitty, wezterm, foot, konsole, gnome-terminal, xterm, ghostty
     - Or select "Custom" for any other terminal
 - **Custom Terminal** (when Custom selected): Command or path to your terminal executable
-- **Kill Existing Terminal**: When enabled, kills any running instance of the terminal before launching a new session (useful for single-terminal workflows)
+- **Terminal Behavior**: Controls how terminal windows are handled when opening sessions:
+    - **newWindow** (default): Opens a new terminal window for each session
+    - **killExisting**: Kills any running instance of the terminal before launching a new session (useful for single-terminal workflows)
+    - **reuseSession**: Switches an existing tmux client to the new session without opening a new terminal. Falls back to opening a new window if no tmux client exists
 
 ### Trigger Settings
 
