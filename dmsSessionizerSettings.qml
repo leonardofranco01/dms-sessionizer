@@ -95,12 +95,36 @@ PluginSettings {
         defaultValue: ""
     }
 
-    ToggleSetting {
-        id: killExistingTerminalSetting
-        settingKey: "killExistingTerminal"
-        label: "Kill Existing Terminal"
-        description: "Kill any existing instance of the terminal before launching a new session."
-        defaultValue: false
+    DankDropdown {
+        id: terminalBehaviorDropdown
+        text: "Terminal Behavior"
+        description: "How to handle terminal windows when opening sessions"
+        currentValue: root.loadValue("terminalBehavior", "newWindow")
+        options: [
+            "newWindow",
+            "killExisting",
+            "reuseSession"
+        ]
+        dropdownWidth: 180
+        onValueChanged: function(value) {
+            root.saveValue("terminalBehavior", value);
+        }
+    }
+
+    StyledText {
+        width: parent.width
+        leftPadding: Theme.spacingM
+        text: {
+            var behavior = terminalBehaviorDropdown.currentValue;
+            if (behavior === "newWindow") return "New Window: Opens a new terminal window for each session.";
+            if (behavior === "killExisting") return "Kill Existing: Kills any existing terminal before opening a new one.";
+            if (behavior === "reuseSession") return "Reuse Session: Switches an existing tmux client to the new session. Falls back to new window if no client exists.";
+            return "";
+        }
+        font.pixelSize: Theme.fontSizeSmall
+        font.italic: true
+        color: Theme.surfaceVariantText
+        wrapMode: Text.WordWrap
     }
 
     Rectangle {

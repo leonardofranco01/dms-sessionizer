@@ -15,7 +15,7 @@ QtObject {
     property string projectsDir: ""
     property string terminal: "st"
     property string customTerminal: ""
-    property bool killExistingTerminal: false
+    property string terminalBehavior: "newWindow"
     property int maxResults: 50
 
     // Cached data
@@ -80,9 +80,47 @@ QtObject {
         running: false
 
         onExited: function(exitCode) {
-            // exitCode 0 = session exists, attach to it
-            // exitCode != 0 = session doesn't exist, create new one
-            root.launchTerminalWithTmux(sessionName, projectPath, exitCode === 0);
+            var sessionExists = exitCode === 0;
+
+            if (root.terminalBehavior === "reuseSession") {
+                root.handleReuseSession(sessionName, projectPath, sessionExists);
+            } else {
+                root.launchTerminalWithTmux(sessionName, projectPath, sessionExists);
+            }
+        }
+    }
+
+    property var createDetachedSessionProcess: Process {
+        property string sessionName: ""
+        property string projectPath: ""
+        
+        command: ["tmux", "new-session", "-d", "-s", "", "-c", ""]
+        running: false
+
+        onExited: function(exitCode) {
+            if (exitCode === 0) {
+                root.switchToSession(sessionName, projectPath);
+            } else {
+                console.warn("DMS Sessionizer: Failed to create detached session, falling back to new terminal");
+                root.launchTerminalWithTmux(sessionName, projectPath, false);
+            }
+        }
+    }
+
+    property var switchClientProcess: Process {
+        property string sessionName: ""
+        property string projectPath: ""
+        
+        command: ["tmux", "switch-client", "-t", ""]
+        running: false
+
+        onExited: function(exitCode) {
+            if (exitCode === 0) {
+                if (ToastService) ToastService.showInfo("Switched to session: " + sessionName);
+            } else {
+                console.log("DMS Sessionizer: No existing tmux client, opening new terminal");
+                root.launchTerminalWithTmux(sessionName, projectPath, true);
+            }
         }
     }
 
@@ -97,7 +135,7 @@ QtObject {
             projectsDir = pluginService.loadPluginData("dmsSessionizer", "projectsDir", "");
             terminal = pluginService.loadPluginData("dmsSessionizer", "terminal", "st");
             customTerminal = pluginService.loadPluginData("dmsSessionizer", "customTerminal", "");
-            killExistingTerminal = pluginService.loadPluginData("dmsSessionizer", "killExistingTerminal", false);
+            terminalBehavior = pluginService.loadPluginData("dmsSessionizer", "terminalBehavior", "newWindow");
             var maxResultsStr = pluginService.loadPluginData("dmsSessionizer", "maxResults", "50");
             maxResults = parseInt(maxResultsStr, 10) || 50;
         }
@@ -278,12 +316,11 @@ QtObject {
             var projectPath = actionData;
             var sessionName = getBasename(projectPath);
 
-            if (killExistingTerminal) {
+            if (terminalBehavior === "killExisting") {
                 var termExe = getTerminalExecutable();
                 killTerminalProcess.command = ["pkill", "-x", termExe];
                 killTerminalProcess.running = true;
                 
-                // Small delay before launching new terminal
                 Qt.callLater(function() {
                     checkAndLaunchTmux(sessionName, projectPath);
                 });
@@ -334,9 +371,25 @@ QtObject {
     }
 
     function escapeShellArg(arg) {
-        // Shell argument escaping
-        // Wrap in single quotes and escape existing single quotes
         return "'" + arg.replace(/'/g, "'\\''") + "'";
+    }
+
+    function handleReuseSession(sessionName, projectPath, sessionExists) {
+        if (sessionExists) {
+            switchToSession(sessionName, projectPath);
+        } else {
+            createDetachedSessionProcess.sessionName = sessionName;
+            createDetachedSessionProcess.projectPath = projectPath;
+            createDetachedSessionProcess.command = ["tmux", "new-session", "-d", "-s", sessionName, "-c", projectPath];
+            createDetachedSessionProcess.running = true;
+        }
+    }
+
+    function switchToSession(sessionName, projectPath) {
+        switchClientProcess.sessionName = sessionName;
+        switchClientProcess.projectPath = projectPath;
+        switchClientProcess.command = ["tmux", "switch-client", "-t", sessionName];
+        switchClientProcess.running = true;
     }
 
     onTriggerChanged: {
