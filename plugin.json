@@ -3,16 +3,16 @@
     "name": "DMS Sessionizer",
     "description": "Create tmux sessions for your projects",
     "author": "leonardofranco01",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "icon": "terminal",
     "type": "launcher",
     "capabilities": [
+        "launcher",
         "command-execution",
         "shell"
     ],
     "component": "./dmsSessionizer.qml",
     "settings": "./dmsSessionizerSettings.qml",
-    "requires_dms": ">=1.2.0",
     "trigger": "tm",
     "permissions": [
         "settings_read",
