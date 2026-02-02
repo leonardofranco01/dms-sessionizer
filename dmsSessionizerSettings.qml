@@ -32,7 +32,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "Projects Directory"
+        text: "Projects Directories"
         font.pixelSize: Theme.fontSizeMedium
         font.weight: Font.Medium
         color: Theme.surfaceText
@@ -41,10 +41,18 @@ PluginSettings {
     StringSetting {
         id: projectsDirSetting
         settingKey: "projectsDir"
-        label: "Directory Path"
-        description: "Path to your projects folder. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
-        placeholder: "~/projects"
+        label: "Directory Paths"
+        description: "Paths to your project folders, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
+        placeholder: "~/projects, ~/work, ~/code"
         defaultValue: ""
+    }
+
+    ToggleSetting {
+        id: includeHiddenSetting
+        settingKey: "includeHidden"
+        label: "Include Hidden Directories"
+        description: "Include directories that start with a dot (e.g., .config, .local)"
+        defaultValue: false
     }
 
     Rectangle {
@@ -239,7 +247,7 @@ PluginSettings {
 
         Repeater {
             model: [
-                "• Lists all folders in your projects directory",
+                "• Lists all folders in your projects directories",
                 "• Creates a tmux session named after the folder",
                 "• Sets the working directory to the project folder",
                 "• Attaches to existing sessions automatically"
