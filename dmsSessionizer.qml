@@ -19,10 +19,12 @@ QtObject {
     property bool includeHidden: false
     property bool includeSymlinks: false
     property int maxResults: 50
+    property bool mruSort: false
 
     // Cached data
     property var cachedProjects: []
     property var cachedRunningSessions: []
+    property var mruData: ({})
 
     // Raw data from process
     property string projectsRawData: ""
@@ -185,6 +187,13 @@ QtObject {
             includeSymlinks = pluginService.loadPluginData("dmsSessionizer", "includeSymlinks", false);
             var maxResultsStr = pluginService.loadPluginData("dmsSessionizer", "maxResults", "50");
             maxResults = parseInt(maxResultsStr, 10) || 50;
+            mruSort = pluginService.loadPluginData("dmsSessionizer", "mruSort", false);
+            var mruRaw = pluginService.loadPluginData("dmsSessionizer", "mruData", "{}");
+            try {
+                mruData = JSON.parse(mruRaw) || {};
+            } catch (e) {
+                mruData = {};
+            }
         }
     }
 
@@ -300,9 +309,18 @@ QtObject {
                 });
             }
 
-            result.sort(function(a, b) {
-                return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-            });
+            if (mruSort) {
+                result.sort(function(a, b) {
+                    var ta = mruData[a.path] || 0;
+                    var tb = mruData[b.path] || 0;
+                    if (tb !== ta) return tb - ta;
+                    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+                });
+            } else {
+                result.sort(function(a, b) {
+                    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+                });
+            }
 
             cachedProjects = result;
             itemsChanged();
@@ -311,6 +329,24 @@ QtObject {
             cachedProjects = [];
             itemsChanged();
         }
+    }
+
+    function recordMru(path) {
+        if (!path || !pluginService) return;
+        var copy = {};
+        for (var k in mruData) copy[k] = mruData[k];
+        copy[path] = Date.now();
+
+        var keys = Object.keys(copy);
+        if (keys.length > 100) {
+            keys.sort(function(a, b) { return copy[b] - copy[a]; });
+            var trimmed = {};
+            for (var i = 0; i < 100; i++) trimmed[keys[i]] = copy[keys[i]];
+            copy = trimmed;
+        }
+
+        mruData = copy;
+        pluginService.savePluginData("dmsSessionizer", "mruData", JSON.stringify(copy));
     }
 
     function getBasename(path) {
@@ -469,6 +505,7 @@ QtObject {
 
         if (actionType === "session") {
             var projectPath = actionData;
+            recordMru(projectPath);
             dispatchTmuxLaunch(getBasename(projectPath), projectPath);
         } else if (actionType === "newSession") {
             dispatchTmuxLaunch(actionData, homeDir);
@@ -577,5 +614,11 @@ QtObject {
     onTerminalChanged: {
         if (!pluginService) return;
         pluginService.savePluginData("dmsSessionizer", "terminal", terminal);
+    }
+
+    onMruSortChanged: {
+        if (!pluginService) return;
+        pluginService.savePluginData("dmsSessionizer", "mruSort", mruSort);
+        parseProjectsData();
     }
 }

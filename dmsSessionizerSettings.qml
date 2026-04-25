@@ -265,12 +265,20 @@ PluginSettings {
         opacity: 0.3
     }
 
+    ToggleSetting {
+        id: mruSortSetting
+        settingKey: "mruSort"
+        label: "Sort by Recency"
+        description: "Show most recently opened projects first"
+        defaultValue: false
+    }
+
     Column {
         width: parent.width
         spacing: 5
 
-        StyledText { 
-            text: "Max Results" 
+        StyledText {
+            text: "Max Results"
         }
 
         StyledText {
