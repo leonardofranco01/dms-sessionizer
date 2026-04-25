@@ -335,6 +335,16 @@ QtObject {
             }
         }
 
+        if (count === 0 && trimmed.length > 0) {
+            items.push({
+                name: "Create new session: " + trimmed,
+                comment: "Adhoc tmux session in " + homeDir,
+                action: "newSession:" + trimmed,
+                icon: "material:add",
+                categories: ["DMS Sessionizer"]
+            });
+        }
+
         items.push({
             name: "↻ Refresh Projects",
             comment: "Reload projects from " + getProjectsDirs().length + " director" + (getProjectsDirs().length === 1 ? "y" : "ies"),
@@ -361,23 +371,28 @@ QtObject {
 
         if (actionType === "session") {
             var projectPath = actionData;
-            var sessionName = getBasename(projectPath);
-            
-            if (sessionName.indexOf(".") === 0 && sessionName.length > 1) {
-                sessionName = sessionName.substring(1);
-            }
+            dispatchTmuxLaunch(getBasename(projectPath), projectPath);
+        } else if (actionType === "newSession") {
+            dispatchTmuxLaunch(actionData, homeDir);
+        }
+    }
 
-            if (terminalBehavior === "killExisting") {
-                var termExe = getTerminalExecutable();
-                killTerminalProcess.command = ["pkill", "-x", termExe];
-                killTerminalProcess.running = true;
-                
-                Qt.callLater(function() {
-                    checkAndLaunchTmux(sessionName, projectPath);
-                });
-            } else {
-                checkAndLaunchTmux(sessionName, projectPath);
-            }
+    function dispatchTmuxLaunch(rawName, workdir) {
+        var sessionName = rawName;
+        if (sessionName.indexOf(".") === 0 && sessionName.length > 1) {
+            sessionName = sessionName.substring(1);
+        }
+
+        if (terminalBehavior === "killExisting") {
+            var termExe = getTerminalExecutable();
+            killTerminalProcess.command = ["pkill", "-x", termExe];
+            killTerminalProcess.running = true;
+
+            Qt.callLater(function() {
+                checkAndLaunchTmux(sessionName, workdir);
+            });
+        } else {
+            checkAndLaunchTmux(sessionName, workdir);
         }
     }
 
