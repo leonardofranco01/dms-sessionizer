@@ -101,6 +101,22 @@ QtObject {
         }
     }
 
+    property var killSessionProcess: Process {
+        property string targetName: ""
+
+        command: ["tmux", "kill-session", "-t", ""]
+        running: false
+
+        onExited: function(exitCode) {
+            if (exitCode === 0) {
+                if (ToastService) ToastService.showInfo("Killed tmux session: " + targetName);
+            } else {
+                console.warn("DMS Sessionizer: Failed to kill session:", targetName, "exit:", exitCode);
+            }
+            root.refreshRunningSessions();
+        }
+    }
+
     property var tmuxCheckProcess: Process {
         property string sessionName: ""
         property string projectPath: ""
@@ -352,6 +368,33 @@ QtObject {
 
         var count = 0;
 
+        // Kill mode: queries starting with '!' show running sessions as kill candidates
+        if (trimmed.indexOf("!") === 0) {
+            var killQuery = trimmed.substring(1).trim().toLowerCase();
+            var killFilters = killQuery.split(/\s+/).filter(function(t) { return t.length > 0; });
+            for (var ki = 0; ki < cachedRunningSessions.length && count < maxResults; ki++) {
+                var ks = cachedRunningSessions[ki];
+                if (matchesFilters(ks, killFilters)) {
+                    items.push({
+                        name: "Kill session: " + ks,
+                        comment: "Stop tmux session",
+                        action: "kill:" + ks,
+                        icon: "material:close",
+                        categories: ["DMS Sessionizer"]
+                    });
+                    count++;
+                }
+            }
+            items.push({
+                name: "↻ Refresh Projects",
+                comment: "Reload projects from " + getProjectsDirs().length + " director" + (getProjectsDirs().length === 1 ? "y" : "ies"),
+                action: "refresh",
+                icon: "material:refresh",
+                categories: ["DMS Sessionizer"]
+            });
+            return items;
+        }
+
         // Add projects
         for (var pi = 0; pi < cachedProjects.length && count < maxResults; pi++) {
             var project = cachedProjects[pi];
@@ -431,6 +474,10 @@ QtObject {
             dispatchTmuxLaunch(actionData, homeDir);
         } else if (actionType === "attach") {
             dispatchTmuxLaunch(actionData, homeDir);
+        } else if (actionType === "kill") {
+            killSessionProcess.targetName = actionData;
+            killSessionProcess.command = ["tmux", "kill-session", "-t", actionData];
+            killSessionProcess.running = true;
         }
     }
 

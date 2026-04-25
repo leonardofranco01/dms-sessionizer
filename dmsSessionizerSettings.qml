@@ -330,6 +330,7 @@ PluginSettings {
                 "3. Search by typing to filter projects",
                 "4. Press Enter to open in terminal with tmux",
                 "5. If a session exists, it will attach; otherwise creates new",
+                "6. Type '!' before a name to kill a running session (e.g., !work)",
                 "Note: after changing the plugin configuration, restart your DMS session",
             ]
 
