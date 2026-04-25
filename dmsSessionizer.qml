@@ -218,11 +218,6 @@ QtObject {
         return dirs.length > 0 ? dirs : [homeDir + "/projects"];
     }
 
-    function getProjectsDir() {
-        var dirs = getProjectsDirs();
-        return dirs[0] || homeDir + "/projects";
-    }
-
     function getTerminalExecutable() {
         if (terminal === "Custom" && customTerminal && customTerminal.length > 0) {
             return customTerminal;
@@ -382,6 +377,17 @@ QtObject {
         return "..." + result;
     }
 
+    function makeRefreshItem() {
+        var n = getProjectsDirs().length;
+        return {
+            name: "↻ Refresh Projects",
+            comment: "Reload projects from " + n + " director" + (n === 1 ? "y" : "ies"),
+            action: "refresh",
+            icon: "material:refresh",
+            categories: ["DMS Sessionizer"]
+        };
+    }
+
     function matchesFilters(item, filters) {
         if (filters.length === 0) return true;
 
@@ -421,13 +427,7 @@ QtObject {
                     count++;
                 }
             }
-            items.push({
-                name: "↻ Refresh Projects",
-                comment: "Reload projects from " + getProjectsDirs().length + " director" + (getProjectsDirs().length === 1 ? "y" : "ies"),
-                action: "refresh",
-                icon: "material:refresh",
-                categories: ["DMS Sessionizer"]
-            });
+            items.push(makeRefreshItem());
             return items;
         }
 
@@ -479,13 +479,7 @@ QtObject {
             });
         }
 
-        items.push({
-            name: "↻ Refresh Projects",
-            comment: "Reload projects from " + getProjectsDirs().length + " director" + (getProjectsDirs().length === 1 ? "y" : "ies"),
-            action: "refresh",
-            icon: "material:refresh",
-            categories: ["DMS Sessionizer"]
-        });
+        items.push(makeRefreshItem());
 
         return items;
     }
@@ -507,9 +501,7 @@ QtObject {
             var projectPath = actionData;
             recordMru(projectPath);
             dispatchTmuxLaunch(getBasename(projectPath), projectPath);
-        } else if (actionType === "newSession") {
-            dispatchTmuxLaunch(actionData, homeDir);
-        } else if (actionType === "attach") {
+        } else if (actionType === "newSession" || actionType === "attach") {
             dispatchTmuxLaunch(actionData, homeDir);
         } else if (actionType === "kill") {
             killSessionProcess.targetName = actionData;
