@@ -22,9 +22,11 @@ QtObject {
 
     // Cached data
     property var cachedProjects: []
+    property var cachedRunningSessions: []
 
     // Raw data from process
     property string projectsRawData: ""
+    property string sessionsRawData: ""
     property var pendingDirs: []
     property int currentDirIndex: 0
 
@@ -71,6 +73,31 @@ QtObject {
             }
             root.currentDirIndex++;
             root.scanNextDirectory();
+        }
+    }
+
+    property var listSessionsProcess: Process {
+        command: ["tmux", "list-sessions", "-F", "#S"]
+        running: false
+
+        stdout: SplitParser {
+            splitMarker: ""
+            onRead: function(data) {
+                root.sessionsRawData += data;
+            }
+        }
+
+        onExited: function(exitCode) {
+            // exitCode != 0 when no tmux server running — treat as empty list
+            var lines = root.sessionsRawData.split("\n");
+            var out = [];
+            for (var i = 0; i < lines.length; i++) {
+                var s = lines[i].trim();
+                if (s) out.push(s);
+            }
+            out.sort();
+            root.cachedRunningSessions = out;
+            root.itemsChanged();
         }
     }
 
@@ -189,12 +216,20 @@ QtObject {
         cachedProjects = [];
         pendingDirs = getProjectsDirs();
         currentDirIndex = 0;
-        
+
+        refreshRunningSessions();
+
         if (pendingDirs.length > 0) {
             scanNextDirectory();
         } else {
             itemsChanged();
         }
+    }
+
+    function refreshRunningSessions() {
+        sessionsRawData = "";
+        cachedRunningSessions = [];
+        listSessionsProcess.running = true;
     }
 
     function scanNextDirectory() {
@@ -335,6 +370,26 @@ QtObject {
             }
         }
 
+        // Add running tmux sessions not already represented as projects
+        var projectNamesSeen = {};
+        for (var seen = 0; seen < cachedProjects.length; seen++) {
+            projectNamesSeen[cachedProjects[seen].name] = true;
+        }
+        for (var ri = 0; ri < cachedRunningSessions.length && count < maxResults; ri++) {
+            var sess = cachedRunningSessions[ri];
+            if (projectNamesSeen[sess]) continue;
+            if (matchesFilters(sess, filters)) {
+                items.push({
+                    name: sess,
+                    comment: "Running tmux session",
+                    action: "attach:" + sess,
+                    icon: "material:play_arrow",
+                    categories: ["DMS Sessionizer"]
+                });
+                count++;
+            }
+        }
+
         if (count === 0 && trimmed.length > 0) {
             items.push({
                 name: "Create new session: " + trimmed,
@@ -373,6 +428,8 @@ QtObject {
             var projectPath = actionData;
             dispatchTmuxLaunch(getBasename(projectPath), projectPath);
         } else if (actionType === "newSession") {
+            dispatchTmuxLaunch(actionData, homeDir);
+        } else if (actionType === "attach") {
             dispatchTmuxLaunch(actionData, homeDir);
         }
     }
