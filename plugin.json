@@ -3,7 +3,7 @@
     "name": "DMS Sessionizer",
     "description": "Create tmux sessions for your projects",
     "author": "leonardofranco01",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "icon": "terminal",
     "type": "launcher",
     "capabilities": [

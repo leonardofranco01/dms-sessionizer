@@ -23,6 +23,7 @@ QtObject {
 
     // Cached data
     property var cachedProjects: []
+    property var cachedProjectNames: ({})
     property var cachedRunningSessions: []
     property var mruData: ({})
 
@@ -283,6 +284,7 @@ QtObject {
         var data = projectsRawData;
         if (!data || data.length === 0) {
             cachedProjects = [];
+            cachedProjectNames = ({});
             itemsChanged();
             return;
         }
@@ -318,10 +320,14 @@ QtObject {
             }
 
             cachedProjects = result;
+            var nameSet = {};
+            for (var n = 0; n < result.length; n++) nameSet[result[n].name] = true;
+            cachedProjectNames = nameSet;
             itemsChanged();
         } catch (e) {
             console.warn("DMS Sessionizer: Error parsing projects data:", e);
             cachedProjects = [];
+            cachedProjectNames = ({});
             itemsChanged();
         }
     }
@@ -400,76 +406,77 @@ QtObject {
         return true;
     }
 
-    function getItems(query) {
-        var items = [];
-        var trimmed = query ? query.trim() : "";
-        var lowerQuery = trimmed.toLowerCase();
-
-        // Parse query for filters
-        var filters = lowerQuery.split(/\s+/).filter(function(t) { return t.length > 0; });
-
-        var count = 0;
-
-        // Kill mode: queries starting with '!' show running sessions as kill candidates
-        if (trimmed.indexOf("!") === 0) {
-            var killQuery = trimmed.substring(1).trim().toLowerCase();
-            var killFilters = killQuery.split(/\s+/).filter(function(t) { return t.length > 0; });
-            for (var ki = 0; ki < cachedRunningSessions.length && count < maxResults; ki++) {
-                var ks = cachedRunningSessions[ki];
-                if (matchesFilters(ks, killFilters)) {
-                    items.push({
-                        name: "Kill session: " + ks,
-                        comment: "Stop tmux session",
-                        action: "kill:" + ks,
-                        icon: "material:close",
-                        categories: ["DMS Sessionizer"]
-                    });
-                    count++;
-                }
+    function buildKillItems(query, limit) {
+        var killFilters = query.split(/\s+/).filter(function(t) { return t.length > 0; });
+        var out = [];
+        for (var i = 0; i < cachedRunningSessions.length && out.length < limit; i++) {
+            var ks = cachedRunningSessions[i];
+            if (matchesFilters(ks, killFilters)) {
+                out.push({
+                    name: "Kill session: " + ks,
+                    comment: "Stop tmux session",
+                    action: "kill:" + ks,
+                    icon: "material:close",
+                    categories: ["DMS Sessionizer"]
+                });
             }
-            items.push(makeRefreshItem());
-            return items;
         }
+        return out;
+    }
 
-        // Add projects
-        for (var pi = 0; pi < cachedProjects.length && count < maxResults; pi++) {
-            var project = cachedProjects[pi];
-            var pname = project.name || "";
-            var ppath = project.path || "";
-
+    function buildProjectItems(filters, limit) {
+        var out = [];
+        for (var i = 0; i < cachedProjects.length && out.length < limit; i++) {
+            var p = cachedProjects[i];
+            var pname = p.name || "";
+            var ppath = p.path || "";
             if (matchesFilters(pname, filters) || matchesFilters(ppath, filters)) {
-                items.push({
+                out.push({
                     name: pname,
                     comment: shortenPath(ppath),
                     action: "session:" + ppath,
                     icon: "material:terminal",
                     categories: ["DMS Sessionizer"]
                 });
-                count++;
             }
         }
+        return out;
+    }
 
-        // Add running tmux sessions not already represented as projects
-        var projectNamesSeen = {};
-        for (var seen = 0; seen < cachedProjects.length; seen++) {
-            projectNamesSeen[cachedProjects[seen].name] = true;
-        }
-        for (var ri = 0; ri < cachedRunningSessions.length && count < maxResults; ri++) {
-            var sess = cachedRunningSessions[ri];
-            if (projectNamesSeen[sess]) continue;
-            if (matchesFilters(sess, filters)) {
-                items.push({
-                    name: sess,
+    function buildRunningSessionItems(filters, limit) {
+        var out = [];
+        for (var i = 0; i < cachedRunningSessions.length && out.length < limit; i++) {
+            var s = cachedRunningSessions[i];
+            if (cachedProjectNames[s]) continue;
+            if (matchesFilters(s, filters)) {
+                out.push({
+                    name: s,
                     comment: "Running tmux session",
-                    action: "attach:" + sess,
+                    action: "attach:" + s,
                     icon: "material:play_arrow",
                     categories: ["DMS Sessionizer"]
                 });
-                count++;
             }
         }
+        return out;
+    }
 
-        if (count === 0 && trimmed.length > 0) {
+    function getItems(query) {
+        var trimmed = query ? query.trim() : "";
+        var lowerQuery = trimmed.toLowerCase();
+        var filters = lowerQuery.split(/\s+/).filter(function(t) { return t.length > 0; });
+
+        if (trimmed.indexOf("!") === 0) {
+            var killItems = buildKillItems(trimmed.substring(1).trim().toLowerCase(), maxResults);
+            killItems.push(makeRefreshItem());
+            return killItems;
+        }
+
+        var projectItems = buildProjectItems(filters, maxResults);
+        var sessionItems = buildRunningSessionItems(filters, maxResults - projectItems.length);
+
+        var items = projectItems.concat(sessionItems);
+        if (items.length === 0 && trimmed.length > 0) {
             items.push({
                 name: "Create new session: " + trimmed,
                 comment: "Adhoc tmux session in " + homeDir,
@@ -478,9 +485,7 @@ QtObject {
                 categories: ["DMS Sessionizer"]
             });
         }
-
         items.push(makeRefreshItem());
-
         return items;
     }
 
