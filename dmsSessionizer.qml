@@ -25,6 +25,7 @@ QtObject {
     property var cachedProjects: []
     property var cachedProjectNames: ({})
     property var cachedRunningSessions: []
+    property var cachedRunningSessionsLower: []
     property var mruData: ({})
 
     // Raw data from process
@@ -35,6 +36,9 @@ QtObject {
 
     // Home directory
     property string homeDir: Quickshell.env("HOME") || "/home"
+
+    // Number of projects directories (cached via binding)
+    property int projectsDirsCount: getProjectsDirs().length
 
     // Terminal configurations
     readonly property var terminalConfigs: ({
@@ -100,6 +104,9 @@ QtObject {
             }
             out.sort();
             root.cachedRunningSessions = out;
+            var outLower = [];
+            for (var j = 0; j < out.length; j++) outLower.push(out[j].toLowerCase());
+            root.cachedRunningSessionsLower = outLower;
             root.itemsChanged();
         }
     }
@@ -250,6 +257,7 @@ QtObject {
     function refreshRunningSessions() {
         sessionsRawData = "";
         cachedRunningSessions = [];
+        cachedRunningSessionsLower = [];
         listSessionsProcess.running = true;
     }
 
@@ -302,22 +310,20 @@ QtObject {
 
                 result.push({
                     name: name,
-                    path: line
+                    path: line,
+                    lname: name.toLowerCase(),
+                    lpath: line.toLowerCase()
                 });
             }
 
-            if (mruSort) {
-                result.sort(function(a, b) {
+            result.sort(function(a, b) {
+                if (mruSort) {
                     var ta = mruData[a.path] || 0;
                     var tb = mruData[b.path] || 0;
                     if (tb !== ta) return tb - ta;
-                    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-                });
-            } else {
-                result.sort(function(a, b) {
-                    return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
-                });
-            }
+                }
+                return a.lname.localeCompare(b.lname);
+            });
 
             cachedProjects = result;
             var nameSet = {};
@@ -384,24 +390,19 @@ QtObject {
     }
 
     function makeRefreshItem() {
-        var n = getProjectsDirs().length;
         return {
             name: "↻ Refresh Projects",
-            comment: "Reload projects from " + n + " director" + (n === 1 ? "y" : "ies"),
+            comment: "Reload projects from " + projectsDirsCount + " director" + (projectsDirsCount === 1 ? "y" : "ies"),
             action: "refresh",
             icon: "material:refresh",
             categories: ["DMS Sessionizer"]
         };
     }
 
-    function matchesFilters(item, filters) {
+    function matchesFilters(loweredItem, filters) {
         if (filters.length === 0) return true;
-
-        var lowerItem = item.toLowerCase();
         for (var i = 0; i < filters.length; i++) {
-            if (lowerItem.indexOf(filters[i]) === -1) {
-                return false;
-            }
+            if (loweredItem.indexOf(filters[i]) === -1) return false;
         }
         return true;
     }
@@ -410,8 +411,8 @@ QtObject {
         var killFilters = query.split(/\s+/).filter(function(t) { return t.length > 0; });
         var out = [];
         for (var i = 0; i < cachedRunningSessions.length && out.length < limit; i++) {
-            var ks = cachedRunningSessions[i];
-            if (matchesFilters(ks, killFilters)) {
+            if (matchesFilters(cachedRunningSessionsLower[i], killFilters)) {
+                var ks = cachedRunningSessions[i];
                 out.push({
                     name: "Kill session: " + ks,
                     comment: "Stop tmux session",
@@ -428,13 +429,11 @@ QtObject {
         var out = [];
         for (var i = 0; i < cachedProjects.length && out.length < limit; i++) {
             var p = cachedProjects[i];
-            var pname = p.name || "";
-            var ppath = p.path || "";
-            if (matchesFilters(pname, filters) || matchesFilters(ppath, filters)) {
+            if (matchesFilters(p.lname, filters) || matchesFilters(p.lpath, filters)) {
                 out.push({
-                    name: pname,
-                    comment: shortenPath(ppath),
-                    action: "session:" + ppath,
+                    name: p.name,
+                    comment: shortenPath(p.path),
+                    action: "session:" + p.path,
                     icon: "material:terminal",
                     categories: ["DMS Sessionizer"]
                 });
@@ -448,7 +447,7 @@ QtObject {
         for (var i = 0; i < cachedRunningSessions.length && out.length < limit; i++) {
             var s = cachedRunningSessions[i];
             if (cachedProjectNames[s]) continue;
-            if (matchesFilters(s, filters)) {
+            if (matchesFilters(cachedRunningSessionsLower[i], filters)) {
                 out.push({
                     name: s,
                     comment: "Running tmux session",
