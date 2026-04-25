@@ -226,6 +226,10 @@ QtObject {
         return dirs.length > 0 ? dirs : [homeDir + "/projects"];
     }
 
+    function persist(key, value) {
+        if (pluginService) pluginService.savePluginData("dmsSessionizer", key, value);
+    }
+
     function getTerminalExecutable() {
         if (terminal === "Custom" && customTerminal && customTerminal.length > 0) {
             return customTerminal;
@@ -269,21 +273,9 @@ QtObject {
         
         var dir = pendingDirs[currentDirIndex];
         var cmd = ["find"];
-        if (includeSymlinks) {
-            cmd.push("-L");
-        }
-        cmd.push(dir);
-        cmd.push("-maxdepth");
-        cmd.push("1");
-        cmd.push("-mindepth");
-        cmd.push("1");
-        cmd.push("-type");
-        cmd.push("d");
-        if (!includeHidden) {
-            cmd.push("-not");
-            cmd.push("-name");
-            cmd.push(".*");
-        }
+        if (includeSymlinks) cmd.push("-L");
+        cmd.push(dir, "-maxdepth", "1", "-mindepth", "1", "-type", "d");
+        if (!includeHidden) cmd.push("-not", "-name", ".*");
         listDirProcess.command = cmd;
         listDirProcess.running = true;
     }
@@ -353,17 +345,15 @@ QtObject {
         }
 
         mruData = copy;
-        pluginService.savePluginData("dmsSessionizer", "mruData", JSON.stringify(copy));
+        persist("mruData", JSON.stringify(copy));
     }
 
     function getBasename(path) {
         if (!path) return "";
-        // Remove trailing slash if present
-        if (path.charAt(path.length - 1) === "/") {
-            path = path.substring(0, path.length - 1);
-        }
-        var parts = path.split("/");
-        return parts[parts.length - 1] || path;
+        var end = path.length;
+        if (path.charAt(end - 1) === "/") end--;
+        var slash = path.lastIndexOf("/", end - 1);
+        return path.substring(slash + 1, end);
     }
 
     function shortenPath(path, maxLength) {
@@ -462,14 +452,14 @@ QtObject {
 
     function getItems(query) {
         var trimmed = query ? query.trim() : "";
-        var lowerQuery = trimmed.toLowerCase();
-        var filters = lowerQuery.split(/\s+/).filter(function(t) { return t.length > 0; });
 
         if (trimmed.indexOf("!") === 0) {
             var killItems = buildKillItems(trimmed.substring(1).trim().toLowerCase(), maxResults);
             killItems.push(makeRefreshItem());
             return killItems;
         }
+
+        var filters = trimmed.toLowerCase().split(/\s+/).filter(function(t) { return t.length > 0; });
 
         var projectItems = buildProjectItems(filters, maxResults);
         var sessionItems = buildRunningSessionItems(filters, maxResults - projectItems.length);
@@ -596,25 +586,21 @@ QtObject {
     }
 
     onTriggerChanged: {
-        if (!pluginService) return;
-        pluginService.savePluginData("dmsSessionizer", "trigger", trigger);
+        persist("trigger", trigger);
         itemsChanged();
     }
 
     onProjectsDirChanged: {
-        if (!pluginService) return;
-        pluginService.savePluginData("dmsSessionizer", "projectsDir", projectsDir);
+        persist("projectsDir", projectsDir);
         refreshCache();
     }
 
     onTerminalChanged: {
-        if (!pluginService) return;
-        pluginService.savePluginData("dmsSessionizer", "terminal", terminal);
+        persist("terminal", terminal);
     }
 
     onMruSortChanged: {
-        if (!pluginService) return;
-        pluginService.savePluginData("dmsSessionizer", "mruSort", mruSort);
+        persist("mruSort", mruSort);
         parseProjectsData();
     }
 }
