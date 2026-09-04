@@ -63,6 +63,13 @@ QtObject {
         }
     }
 
+    // Debounce session re-list while user is in ! kill mode
+    property var killModeRefreshTimer: Timer {
+        interval: 150
+        repeat: false
+        onTriggered: root.refreshRunningSessions()
+    }
+
     property var listDirProcess: Process {
         command: ["ls", "-1d"]
         running: false
@@ -259,9 +266,11 @@ QtObject {
     }
 
     function refreshRunningSessions() {
+        // Keep cachedRunningSessions until list-sessions exits so ! kill mode
+        // does not briefly see an empty list. Skip overlapping restarts.
+        if (listSessionsProcess.running)
+            return;
         sessionsRawData = "";
-        cachedRunningSessions = [];
-        cachedRunningSessionsLower = [];
         listSessionsProcess.running = true;
     }
 
@@ -454,7 +463,23 @@ QtObject {
         var trimmed = query ? query.trim() : "";
 
         if (trimmed.indexOf("!") === 0) {
-            var killItems = buildKillItems(trimmed.substring(1).trim().toLowerCase(), maxResults);
+            var rawKillQuery = trimmed.substring(1).trim();
+            var killItems = buildKillItems(rawKillQuery.toLowerCase(), maxResults);
+
+            // If cache is stale/empty, still offer killing the typed name directly
+            if (rawKillQuery.length > 0 && killItems.length === 0) {
+                killItems.push({
+                    name: "Kill session: " + rawKillQuery,
+                    comment: "Stop tmux session",
+                    action: "kill:" + rawKillQuery,
+                    icon: "material:close",
+                    categories: ["DMS Sessionizer"]
+                });
+            }
+
+            // Refresh session list in background while showing current/fallback items
+            killModeRefreshTimer.restart();
+
             killItems.push(makeRefreshItem());
             return killItems;
         }
@@ -558,6 +583,11 @@ QtObject {
         cmd.push(tmuxCmd);
 
         Quickshell.execDetached(cmd);
+
+        // Session create/attach changes tmux state — keep kill-mode cache fresh
+        Qt.callLater(function() {
+            root.refreshRunningSessions();
+        });
         
         var actionMsg = sessionExists ? "Attaching to" : "Creating";
         if (ToastService) ToastService.showInfo(actionMsg + " tmux session: " + sessionName);
