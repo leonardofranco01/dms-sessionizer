@@ -44,6 +44,7 @@ QtObject {
     property string sessionsRawData: ""
     property var pendingDirs: []
     property int currentDirIndex: 0
+    property bool settingsReady: false
 
     // Home directory
     property string homeDir: Quickshell.env("HOME") || "/home"
@@ -66,9 +67,9 @@ QtObject {
     })
 
     property var initTimer: Timer {
-        interval: 100
+        interval: 0
         repeat: false
-        running: true
+        running: false
         onTriggered: {
             root.refreshCache();
         }
@@ -94,7 +95,7 @@ QtObject {
 
         onExited: function(exitCode) {
             if (exitCode !== 0) {
-                console.warn("DMS Sessionizer: Failed to list directory:", root.pendingDirs[root.currentDirIndex], "exit code:", exitCode);
+                console.warn("DMS Sessionizer: Failed to list directory:", root.pendingDirs[root.currentDirIndex].path, "exit code:", exitCode);
             }
             root.currentDirIndex++;
             root.scanNextDirectory();
@@ -199,7 +200,8 @@ QtObject {
         running: false
     }
 
-    Connections {
+    // Must be a property — QtObject has no default child property
+    property var muxTypeConnections: Connections {
         target: typeof SettingsData !== "undefined" ? SettingsData : null
         function onMuxTypeChanged() {
             root.refreshRunningSessions();
@@ -227,6 +229,8 @@ QtObject {
                 mruData = {};
             }
         }
+        settingsReady = true;
+        initTimer.start();
     }
 
     function normalizeKillPrefix(value) {
@@ -305,24 +309,36 @@ QtObject {
     }
 
     function getProjectsDirs() {
+        // Trailing "/" → scan children; no trailing "/" → treat path as a single project.
         var dirs = [];
-        var input = projectsDir && projectsDir.length > 0 ? projectsDir : "~/projects";
+        var input = projectsDir && projectsDir.length > 0 ? projectsDir : "~/projects/";
         var parts = input.split(/[,\n]+/);
 
         for (var i = 0; i < parts.length; i++) {
             var dir = parts[i].trim();
             if (!dir) continue;
 
+            var scanChildren = dir.charAt(dir.length - 1) === "/";
+            var expanded = "";
+
             if (dir.indexOf("/") === 0) {
-                dirs.push(dir);
+                expanded = dir;
             } else if (dir.indexOf("~") === 0) {
-                dirs.push(homeDir + dir.substring(1));
+                expanded = homeDir + dir.substring(1);
             } else {
-                dirs.push(homeDir + "/" + dir);
+                expanded = homeDir + "/" + dir;
             }
+
+            while (expanded.length > 1 && expanded.charAt(expanded.length - 1) === "/")
+                expanded = expanded.substring(0, expanded.length - 1);
+
+            if (expanded)
+                dirs.push({ path: expanded, scanChildren: scanChildren });
         }
 
-        return dirs.length > 0 ? dirs : [homeDir + "/projects"];
+        return dirs.length > 0
+            ? dirs
+            : [{ path: homeDir + "/projects", scanChildren: true }];
     }
 
     function persist(key, value) {
@@ -373,10 +389,18 @@ QtObject {
             return;
         }
 
-        var dir = pendingDirs[currentDirIndex];
+        var entry = pendingDirs[currentDirIndex];
+        if (!entry.scanChildren) {
+            // Single project directory — include the path itself
+            projectsRawData += entry.path + "\n";
+            currentDirIndex++;
+            scanNextDirectory();
+            return;
+        }
+
         var cmd = ["find"];
         if (includeSymlinks) cmd.push("-L");
-        cmd.push(dir, "-maxdepth", "1", "-mindepth", "1", "-type", "d");
+        cmd.push(entry.path, "-maxdepth", "1", "-mindepth", "1", "-type", "d");
         if (!includeHidden) cmd.push("-not", "-name", ".*");
         listDirProcess.command = cmd;
         listDirProcess.running = true;
@@ -650,7 +674,11 @@ QtObject {
         muxCheckProcess.sessionName = sessionName;
         muxCheckProcess.projectPath = projectPath;
         muxCheckProcess.command = hasSessionCommand(sessionName);
-        muxCheckProcess.running = true;
+        if (muxCheckProcess.running)
+            muxCheckProcess.running = false;
+        Qt.callLater(function() {
+            muxCheckProcess.running = true;
+        });
     }
 
     function launchTerminalWithMux(sessionName, projectPath, sessionExists) {
@@ -718,7 +746,8 @@ QtObject {
 
     onProjectsDirChanged: {
         persist("projectsDir", projectsDir);
-        refreshCache();
+        if (settingsReady)
+            refreshCache();
     }
 
     onTerminalChanged: {

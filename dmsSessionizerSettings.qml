@@ -49,7 +49,7 @@ PluginSettings {
 
         StyledText {
             width: parent.width
-            text: "Paths to your project directories, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
+            text: "Comma-separated paths. Trailing slash scans children (e.g. ~/Projects/); no slash treats the path itself as a project (e.g. ~/dotfiles). Supports absolute paths, ~, or relative to home. Default: ~/projects/"
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.surfaceVariantText
             wrapMode: Text.WordWrap
@@ -58,7 +58,7 @@ PluginSettings {
         DankTextField {
             width: parent.width
             text: root.loadValue("projectsDir", "") 
-            placeholderText: "~/projects, ~/work, ~/code"
+            placeholderText: "~/projects/, ~/dotfiles, ~/work/"
             onEditingFinished: {
                 root.saveValue("projectsDir", text);
             }
@@ -417,8 +417,9 @@ PluginSettings {
 
         Repeater {
             model: [
-                "• Lists all subdirectories in your projects directories",
-                "• Creates a multiplexer session named after the subdirectory selected",
+                "• Paths ending with / list their subdirectories as projects",
+                "• Paths without a trailing / are added as a single project",
+                "• Creates a multiplexer session named after the selected directory",
                 "• Sets the working directory to the project directory",
                 "• Attaches to existing sessions automatically",
                 "• Uses DMS muxType (tmux or Zellij) — no separate plugin toggle"
