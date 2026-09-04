@@ -1,21 +1,21 @@
 {
-    "id": "dmsSessionizer",
-    "name": "DMS Sessionizer",
-    "description": "Create tmux sessions for your projects",
-    "author": "leonardofranco01",
-    "version": "1.5.4",
-    "icon": "terminal",
-    "type": "launcher",
-    "capabilities": [
-        "launcher",
-        "command-execution",
-        "shell"
-    ],
-    "component": "./dmsSessionizer.qml",
-    "settings": "./dmsSessionizerSettings.qml",
-    "trigger": "tm",
-    "permissions": [
-        "settings_read",
-        "settings_write"
-    ]
+  "id": "dmsSessionizer",
+  "name": "DMS Sessionizer",
+  "description": "Create tmux/Zellij sessions for your projects",
+  "author": "leonardofranco01",
+  "version": "1.6.1",
+  "icon": "terminal",
+  "type": "launcher",
+  "capabilities": [
+    "launcher",
+    "command-execution",
+    "shell"
+  ],
+  "component": "./dmsSessionizer.qml",
+  "settings": "./dmsSessionizerSettings.qml",
+  "trigger": "tm",
+  "permissions": [
+    "settings_read",
+    "settings_write"
+  ]
 }
