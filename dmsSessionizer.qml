@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.Common
 import qs.Services
 
 QtObject {
@@ -20,6 +21,16 @@ QtObject {
     property bool includeSymlinks: false
     property int maxResults: 50
     property bool mruSort: false
+    property string killPrefix: "!"
+
+    // Multiplexer backend from DMS System > Multiplexers (SettingsData.muxType)
+    readonly property string muxType: {
+        if (typeof SettingsData !== "undefined" && SettingsData.muxType)
+            return SettingsData.muxType;
+        return "tmux";
+    }
+    readonly property bool isZellij: muxType === "zellij"
+    readonly property string muxDisplayName: isZellij ? "Zellij" : "Tmux"
 
     // Cached data
     property var cachedProjects: []
@@ -63,7 +74,7 @@ QtObject {
         }
     }
 
-    // Debounce session re-list while user is in ! kill mode
+    // Debounce session re-list while user is in kill mode
     property var killModeRefreshTimer: Timer {
         interval: 150
         repeat: false
@@ -102,13 +113,10 @@ QtObject {
         }
 
         onExited: function(exitCode) {
-            // exitCode != 0 when no tmux server running — treat as empty list
-            var lines = root.sessionsRawData.split("\n");
-            var out = [];
-            for (var i = 0; i < lines.length; i++) {
-                var s = lines[i].trim();
-                if (s) out.push(s);
-            }
+            // Non-zero when no server / no sessions — treat as empty list
+            var out = root.isZellij
+                ? root.parseZellijSessionNames(root.sessionsRawData)
+                : root.parseTmuxSessionNames(root.sessionsRawData);
             out.sort();
             root.cachedRunningSessions = out;
             var outLower = [];
@@ -126,7 +134,7 @@ QtObject {
 
         onExited: function(exitCode) {
             if (exitCode === 0) {
-                if (ToastService) ToastService.showInfo("Killed tmux session: " + targetName);
+                if (ToastService) ToastService.showInfo("Killed " + root.muxDisplayName.toLowerCase() + " session: " + targetName);
             } else {
                 console.warn("DMS Sessionizer: Failed to kill session:", targetName, "exit:", exitCode);
             }
@@ -134,20 +142,20 @@ QtObject {
         }
     }
 
-    property var tmuxCheckProcess: Process {
+    property var muxCheckProcess: Process {
         property string sessionName: ""
         property string projectPath: ""
-        
+
         command: ["tmux", "has-session", "-t", ""]
         running: false
 
         onExited: function(exitCode) {
             var sessionExists = exitCode === 0;
 
-            if (root.terminalBehavior === "reuseSession") {
+            if (root.terminalBehavior === "reuseSession" && !root.isZellij) {
                 root.handleReuseSession(sessionName, projectPath, sessionExists);
             } else {
-                root.launchTerminalWithTmux(sessionName, projectPath, sessionExists);
+                root.launchTerminalWithMux(sessionName, projectPath, sessionExists);
             }
         }
     }
@@ -155,7 +163,7 @@ QtObject {
     property var createDetachedSessionProcess: Process {
         property string sessionName: ""
         property string projectPath: ""
-        
+
         command: ["tmux", "new-session", "-d", "-s", "", "-c", ""]
         running: false
 
@@ -164,7 +172,7 @@ QtObject {
                 root.switchToSession(sessionName, projectPath);
             } else {
                 console.warn("DMS Sessionizer: Failed to create detached session, falling back to new terminal");
-                root.launchTerminalWithTmux(sessionName, projectPath, false);
+                root.launchTerminalWithMux(sessionName, projectPath, false);
             }
         }
     }
@@ -172,7 +180,7 @@ QtObject {
     property var switchClientProcess: Process {
         property string sessionName: ""
         property string projectPath: ""
-        
+
         command: ["tmux", "switch-client", "-t", ""]
         running: false
 
@@ -181,7 +189,7 @@ QtObject {
                 if (ToastService) ToastService.showInfo("Switched to session: " + sessionName);
             } else {
                 console.log("DMS Sessionizer: No existing tmux client, opening new terminal");
-                root.launchTerminalWithTmux(sessionName, projectPath, true);
+                root.launchTerminalWithMux(sessionName, projectPath, true);
             }
         }
     }
@@ -189,6 +197,14 @@ QtObject {
     property var killTerminalProcess: Process {
         command: ["pkill", "-x", ""]
         running: false
+    }
+
+    Connections {
+        target: typeof SettingsData !== "undefined" ? SettingsData : null
+        function onMuxTypeChanged() {
+            root.refreshRunningSessions();
+            root.itemsChanged();
+        }
     }
 
     Component.onCompleted: {
@@ -203,6 +219,7 @@ QtObject {
             var maxResultsStr = pluginService.loadPluginData("dmsSessionizer", "maxResults", "50");
             maxResults = parseInt(maxResultsStr, 10) || 50;
             mruSort = pluginService.loadPluginData("dmsSessionizer", "mruSort", false);
+            killPrefix = normalizeKillPrefix(pluginService.loadPluginData("dmsSessionizer", "killPrefix", "!"));
             var mruRaw = pluginService.loadPluginData("dmsSessionizer", "mruData", "{}");
             try {
                 mruData = JSON.parse(mruRaw) || {};
@@ -212,15 +229,90 @@ QtObject {
         }
     }
 
+    function normalizeKillPrefix(value) {
+        var p = (value === undefined || value === null) ? "!" : String(value);
+        // Allow a short prefix; empty falls back to "!"
+        p = p.trim();
+        if (p.length === 0) return "!";
+        // Avoid whitespace-only / multi-line junk from the settings field
+        p = p.split(/\s+/)[0];
+        return p.length > 0 ? p : "!";
+    }
+
+    function parseTmuxSessionNames(data) {
+        var lines = (data || "").split("\n");
+        var out = [];
+        for (var i = 0; i < lines.length; i++) {
+            var s = lines[i].trim();
+            if (s) out.push(s);
+        }
+        return out;
+    }
+
+    function parseZellijSessionNames(data) {
+        var lines = (data || "").split("\n");
+        var out = [];
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (!line) continue;
+            // Skip exited sessions for attach/kill listing
+            if (line.indexOf("(EXITED") !== -1) continue;
+            var bracketIdx = line.indexOf(" [");
+            var name = (bracketIdx > 0 ? line.substring(0, bracketIdx) : line).trim();
+            if (name) out.push(name);
+        }
+        return out;
+    }
+
+    function listSessionsCommand() {
+        if (isZellij)
+            return ["zellij", "list-sessions", "--no-formatting"];
+        return ["tmux", "list-sessions", "-F", "#S"];
+    }
+
+    function killSessionCommand(name) {
+        if (isZellij)
+            return ["zellij", "kill-session", name];
+        return ["tmux", "kill-session", "-t", name];
+    }
+
+    function hasSessionCommand(name) {
+        if (isZellij) {
+            // Exit 0 if an active (non-EXITED) session with this exact name exists
+            return [
+                "sh", "-c",
+                "zellij list-sessions --no-formatting 2>/dev/null | awk -v n=\"$1\" '" +
+                "index($0, \"(EXITED\") { next } " +
+                "{ name=$0; sub(/ \\[.*$/, \"\", name); gsub(/^ +| +$/, \"\", name); if (name == n) exit 0 } " +
+                "END { exit 1 }'",
+                "_",
+                name
+            ];
+        }
+        return ["tmux", "has-session", "-t", name];
+    }
+
+    function muxShellCommand(sessionName, projectPath, sessionExists) {
+        if (isZellij) {
+            if (sessionExists)
+                return "zellij attach " + escapeShellArg(sessionName);
+            // Create in the project directory (zellij has no reliable -c equivalent)
+            return "cd " + escapeShellArg(projectPath) + " && zellij -s " + escapeShellArg(sessionName);
+        }
+        if (sessionExists)
+            return "tmux attach-session -t " + escapeShellArg(sessionName);
+        return "tmux new-session -As " + escapeShellArg(sessionName) + " -c " + escapeShellArg(projectPath);
+    }
+
     function getProjectsDirs() {
         var dirs = [];
         var input = projectsDir && projectsDir.length > 0 ? projectsDir : "~/projects";
         var parts = input.split(/[,\n]+/);
-        
+
         for (var i = 0; i < parts.length; i++) {
             var dir = parts[i].trim();
             if (!dir) continue;
-            
+
             if (dir.indexOf("/") === 0) {
                 dirs.push(dir);
             } else if (dir.indexOf("~") === 0) {
@@ -229,7 +321,7 @@ QtObject {
                 dirs.push(homeDir + "/" + dir);
             }
         }
-        
+
         return dirs.length > 0 ? dirs : [homeDir + "/projects"];
     }
 
@@ -266,11 +358,12 @@ QtObject {
     }
 
     function refreshRunningSessions() {
-        // Keep cachedRunningSessions until list-sessions exits so ! kill mode
+        // Keep cachedRunningSessions until list exits so kill mode
         // does not briefly see an empty list. Skip overlapping restarts.
         if (listSessionsProcess.running)
             return;
         sessionsRawData = "";
+        listSessionsProcess.command = listSessionsCommand();
         listSessionsProcess.running = true;
     }
 
@@ -279,7 +372,7 @@ QtObject {
             parseProjectsData();
             return;
         }
-        
+
         var dir = pendingDirs[currentDirIndex];
         var cmd = ["find"];
         if (includeSymlinks) cmd.push("-L");
@@ -406,6 +499,10 @@ QtObject {
         return true;
     }
 
+    function effectiveKillPrefix() {
+        return normalizeKillPrefix(killPrefix);
+    }
+
     function buildKillItems(query, limit) {
         var killFilters = query.split(/\s+/).filter(function(t) { return t.length > 0; });
         var out = [];
@@ -414,7 +511,7 @@ QtObject {
                 var ks = cachedRunningSessions[i];
                 out.push({
                     name: "Kill session: " + ks,
-                    comment: "Stop tmux session",
+                    comment: "Stop " + muxDisplayName.toLowerCase() + " session",
                     action: "kill:" + ks,
                     icon: "material:close",
                     categories: ["DMS Sessionizer"]
@@ -449,7 +546,7 @@ QtObject {
             if (matchesFilters(cachedRunningSessionsLower[i], filters)) {
                 out.push({
                     name: s,
-                    comment: "Running tmux session",
+                    comment: "Running " + muxDisplayName.toLowerCase() + " session",
                     action: "attach:" + s,
                     icon: "material:play_arrow",
                     categories: ["DMS Sessionizer"]
@@ -461,16 +558,17 @@ QtObject {
 
     function getItems(query) {
         var trimmed = query ? query.trim() : "";
+        var prefix = effectiveKillPrefix();
 
-        if (trimmed.indexOf("!") === 0) {
-            var rawKillQuery = trimmed.substring(1).trim();
+        if (prefix.length > 0 && trimmed.indexOf(prefix) === 0) {
+            var rawKillQuery = trimmed.substring(prefix.length).trim();
             var killItems = buildKillItems(rawKillQuery.toLowerCase(), maxResults);
 
             // If cache is stale/empty, still offer killing the typed name directly
             if (rawKillQuery.length > 0 && killItems.length === 0) {
                 killItems.push({
                     name: "Kill session: " + rawKillQuery,
-                    comment: "Stop tmux session",
+                    comment: "Stop " + muxDisplayName.toLowerCase() + " session",
                     action: "kill:" + rawKillQuery,
                     icon: "material:close",
                     categories: ["DMS Sessionizer"]
@@ -493,7 +591,7 @@ QtObject {
         if (items.length === 0 && trimmed.length > 0) {
             items.push({
                 name: "Create new session: " + trimmed,
-                comment: "Adhoc tmux session in " + homeDir,
+                comment: "Adhoc " + muxDisplayName.toLowerCase() + " session in " + homeDir,
                 action: "newSession:" + trimmed,
                 icon: "material:add",
                 categories: ["DMS Sessionizer"]
@@ -519,17 +617,17 @@ QtObject {
         if (actionType === "session") {
             var projectPath = actionData;
             recordMru(projectPath);
-            dispatchTmuxLaunch(getBasename(projectPath), projectPath);
+            dispatchMuxLaunch(getBasename(projectPath), projectPath);
         } else if (actionType === "newSession" || actionType === "attach") {
-            dispatchTmuxLaunch(actionData, homeDir);
+            dispatchMuxLaunch(actionData, homeDir);
         } else if (actionType === "kill") {
             killSessionProcess.targetName = actionData;
-            killSessionProcess.command = ["tmux", "kill-session", "-t", actionData];
+            killSessionProcess.command = killSessionCommand(actionData);
             killSessionProcess.running = true;
         }
     }
 
-    function dispatchTmuxLaunch(rawName, workdir) {
+    function dispatchMuxLaunch(rawName, workdir) {
         var sessionName = rawName;
         if (sessionName.indexOf(".") === 0 && sessionName.length > 1) {
             sessionName = sessionName.substring(1);
@@ -541,56 +639,48 @@ QtObject {
             killTerminalProcess.running = true;
 
             Qt.callLater(function() {
-                checkAndLaunchTmux(sessionName, workdir);
+                checkAndLaunchMux(sessionName, workdir);
             });
         } else {
-            checkAndLaunchTmux(sessionName, workdir);
+            checkAndLaunchMux(sessionName, workdir);
         }
     }
 
-    function checkAndLaunchTmux(sessionName, projectPath) {
-        tmuxCheckProcess.sessionName = sessionName;
-        tmuxCheckProcess.projectPath = projectPath;
-        tmuxCheckProcess.command = ["tmux", "has-session", "-t", sessionName];
-        tmuxCheckProcess.running = true;
+    function checkAndLaunchMux(sessionName, projectPath) {
+        muxCheckProcess.sessionName = sessionName;
+        muxCheckProcess.projectPath = projectPath;
+        muxCheckProcess.command = hasSessionCommand(sessionName);
+        muxCheckProcess.running = true;
     }
 
-    function launchTerminalWithTmux(sessionName, projectPath, sessionExists) {
+    function launchTerminalWithMux(sessionName, projectPath, sessionExists) {
         var termExe = getTerminalExecutable();
         var execFlag = getTerminalExecFlag();
-
-        var tmuxCmd;
-        if (sessionExists) {
-            tmuxCmd = "tmux attach-session -t " + escapeShellArg(sessionName);
-        } else {
-            tmuxCmd = "tmux new-session -As " + escapeShellArg(sessionName) + " -c " + escapeShellArg(projectPath);
-        }
+        var muxCmd = muxShellCommand(sessionName, projectPath, sessionExists);
 
         var cmd = [];
         cmd.push(termExe);
-        
-        // Handle exec flag
+
         var flagParts = execFlag.split(" ");
         for (var i = 0; i < flagParts.length; i++) {
             if (flagParts[i]) {
                 cmd.push(flagParts[i]);
             }
         }
-        
-        // Add sh -c to properly handle the tmux command
+
         cmd.push("sh");
         cmd.push("-c");
-        cmd.push(tmuxCmd);
+        cmd.push(muxCmd);
 
         Quickshell.execDetached(cmd);
 
-        // Session create/attach changes tmux state — keep kill-mode cache fresh
+        // Session create/attach changes mux state — keep kill-mode cache fresh
         Qt.callLater(function() {
             root.refreshRunningSessions();
         });
-        
+
         var actionMsg = sessionExists ? "Attaching to" : "Creating";
-        if (ToastService) ToastService.showInfo(actionMsg + " tmux session: " + sessionName);
+        if (ToastService) ToastService.showInfo(actionMsg + " " + muxDisplayName.toLowerCase() + " session: " + sessionName);
     }
 
     function escapeShellArg(arg) {
@@ -598,6 +688,7 @@ QtObject {
     }
 
     function handleReuseSession(sessionName, projectPath, sessionExists) {
+        // reuseSession is tmux-only (switch-client); zellij falls back in muxCheckProcess
         if (sessionExists) {
             switchToSession(sessionName, projectPath);
         } else {
@@ -617,6 +708,11 @@ QtObject {
 
     onTriggerChanged: {
         persist("trigger", trigger);
+        itemsChanged();
+    }
+
+    onKillPrefixChanged: {
+        persist("killPrefix", normalizeKillPrefix(killPrefix));
         itemsChanged();
     }
 

@@ -1,9 +1,9 @@
 {
   "id": "dmsSessionizer",
   "name": "DMS Sessionizer",
-  "description": "Create tmux sessions for your projects",
+  "description": "Create tmux/Zellij sessions for your projects",
   "author": "leonardofranco01",
-  "version": "1.5.4",
+  "version": "1.6.0",
   "icon": "terminal",
   "type": "launcher",
   "capabilities": [
