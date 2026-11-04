@@ -17,7 +17,7 @@ PluginSettings {
 
     StyledText {
         width: parent.width
-        text: "Quickly open project directories in a terminal with dedicated tmux sessions. Select a project and it will launch your terminal with a tmux session named after the project. Inspired by ThePrimeagen's tmux-sessionizer and tonybanters's dmenu-scripts."
+        text: "Quickly open project directories in a terminal with dedicated multiplexer sessions (tmux or Zellij, from DMS System → Multiplexers). Select a project and it will launch your terminal with a session named after the project. Inspired by ThePrimeagen's tmux-sessionizer and tonybanters's dmenu-scripts."
         font.pixelSize: Theme.fontSizeSmall
         color: Theme.surfaceVariantText
         wrapMode: Text.WordWrap
@@ -49,7 +49,7 @@ PluginSettings {
 
         StyledText {
             width: parent.width
-            text: "Paths to your project directories, separated by commas. Supports absolute paths, ~ for home, or relative to home. Default: ~/projects"
+            text: "Comma-separated paths. Trailing slash scans children (e.g. ~/Projects/); no slash treats the path itself as a project (e.g. ~/dotfiles). Supports absolute paths, ~, or relative to home. Default: ~/projects/"
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.surfaceVariantText
             wrapMode: Text.WordWrap
@@ -58,7 +58,7 @@ PluginSettings {
         DankTextField {
             width: parent.width
             text: root.loadValue("projectsDir", "") 
-            placeholderText: "~/projects, ~/work, ~/code"
+            placeholderText: "~/projects/, ~/dotfiles, ~/work/"
             onEditingFinished: {
                 root.saveValue("projectsDir", text);
             }
@@ -171,7 +171,7 @@ PluginSettings {
             var behavior = terminalBehaviorDropdown.currentValue;
             if (behavior === "newWindow") return "New Window: Opens a new terminal window for each session.";
             if (behavior === "killExisting") return "Kill Existing: Kills any existing terminal before opening a new one.";
-            if (behavior === "reuseSession") return "Reuse Session: Switches an existing tmux client to the new session. Falls back to new window if no client exists.";
+            if (behavior === "reuseSession") return "Reuse Session: Switches an existing tmux client to the new session. Falls back to new window if no client exists. (tmux only — Zellij always opens a new window.)";
             return "";
         }
         font.pixelSize: Theme.fontSizeSmall
@@ -265,6 +265,55 @@ PluginSettings {
         opacity: 0.3
     }
 
+    StyledText {
+        width: parent.width
+        text: "Kill Prefix"
+        font.pixelSize: Theme.fontSizeMedium
+        font.weight: Font.Medium
+        color: Theme.surfaceText
+    }
+
+    Column {
+        width: parent.width
+        spacing: 5
+
+        StyledText {
+            text: "Deletion Prefix"
+        }
+
+        StyledText {
+            width: parent.width
+            text: "Prefix typed before a session name in the launcher to kill it (default: !). Example: !work"
+            font.pixelSize: Theme.fontSizeSmall
+            color: Theme.surfaceVariantText
+            wrapMode: Text.WordWrap
+        }
+
+        DankTextField {
+            id: killPrefixField
+            width: parent.width
+            text: root.loadValue("killPrefix", "!")
+            placeholderText: "!"
+            onEditingFinished: {
+                var value = text.trim();
+                if (value.length === 0)
+                    value = "!";
+                value = value.split(/\s+/)[0];
+                if (killPrefixField.text !== value)
+                    killPrefixField.text = value;
+                root.saveValue("killPrefix", value);
+            }
+        }
+
+    }
+
+    Rectangle {
+        width: parent.width
+        height: 1
+        color: Theme.outline
+        opacity: 0.3
+    }
+
     ToggleSetting {
         id: mruSortSetting
         settingKey: "mruSort"
@@ -334,11 +383,12 @@ PluginSettings {
         Repeater {
             model: [
                 "1. Open Launcher",
-                noTriggerToggle.value ? "2. Projects are always visible" : "2. Type 'tm' to filter to tmux sessions",
+                noTriggerToggle.value ? "2. Projects are always visible" : "2. Type 'tm' to filter to sessions",
                 "3. Search by typing to filter projects",
-                "4. Press Enter to open in terminal with tmux",
+                "4. Press Enter to open in terminal with your DMS multiplexer (tmux/Zellij)",
                 "5. If a session exists, it will attach; otherwise creates new",
-                "6. Type '!' before a name to kill a running session (e.g., !work)",
+                "6. Type '" + (killPrefixField.text || "!") + "' before a name to kill a running session (e.g., " + (killPrefixField.text || "!") + "work)",
+                "7. Multiplexer backend is taken from DMS Settings → System → Multiplexers",
                 "Note: after changing the plugin configuration, restart your DMS session",
             ]
 
@@ -367,10 +417,12 @@ PluginSettings {
 
         Repeater {
             model: [
-                "• Lists all subdirectories in your projects directories",
-                "• Creates a tmux session named after the subdirectory selected",
+                "• Paths ending with / list their subdirectories as projects",
+                "• Paths without a trailing / are added as a single project",
+                "• Creates a multiplexer session named after the selected directory",
                 "• Sets the working directory to the project directory",
-                "• Attaches to existing sessions automatically"
+                "• Attaches to existing sessions automatically",
+                "• Uses DMS muxType (tmux or Zellij) — no separate plugin toggle"
             ]
 
             StyledText {
