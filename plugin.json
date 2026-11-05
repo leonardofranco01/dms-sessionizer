@@ -3,7 +3,7 @@
   "name": "DMS Sessionizer",
   "description": "Create tmux/Zellij sessions for your projects",
   "author": "leonardofranco01",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "icon": "terminal",
   "type": "launcher",
   "capabilities": [
@@ -14,8 +14,10 @@
   "component": "./dmsSessionizer.qml",
   "settings": "./dmsSessionizerSettings.qml",
   "trigger": "tm",
+  "requires_dms": ">=1.2.0",
   "permissions": [
     "settings_read",
-    "settings_write"
+    "settings_write",
+    "process"
   ]
 }
