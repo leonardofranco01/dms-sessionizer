@@ -7,6 +7,19 @@ PluginSettings {
     id: root
     pluginId: "dmsSessionizer"
 
+    // Before 1.6.1 every path was scanned for children; since then only paths ending in "/" are.
+    // Append "/" to pre-1.6.1 entries so they keep scanning. Twin of migrateProjectsDir in dmsSessionizer.qml.
+    function migrateProjectsDir(value) {
+        var parts = String(value || "").split(/[,\n]+/);
+        var out = [];
+        for (var i = 0; i < parts.length; i++) {
+            var dir = parts[i].trim();
+            if (!dir) continue;
+            out.push(dir.charAt(dir.length - 1) === "/" ? dir : dir + "/");
+        }
+        return out.join(", ");
+    }
+
     StyledText {
         width: parent.width
         text: "DMS Sessionizer"
@@ -41,7 +54,7 @@ PluginSettings {
 
     Column {
         width: parent.width
-        spacing: 5
+        spacing: Theme.spacingXS
 
         StyledText { 
             text: "Directory Paths" 
@@ -57,10 +70,14 @@ PluginSettings {
 
         DankTextField {
             width: parent.width
-            text: root.loadValue("projectsDir", "") 
+            text: {
+                var stored = root.loadValue("projectsDir", "");
+                return String(root.loadValue("projectsDirFormat", "1")) === "2" ? stored : root.migrateProjectsDir(stored);
+            }
             placeholderText: "~/projects/, ~/dotfiles, ~/work/"
             onEditingFinished: {
                 root.saveValue("projectsDir", text);
+                root.saveValue("projectsDirFormat", "2");
             }
         }
 
@@ -123,7 +140,7 @@ PluginSettings {
     Column {
         width: parent.width
         visible: terminalDropdown.currentValue === "Custom"
-        spacing: 5
+        spacing: Theme.spacingXS
 
         StyledText { 
             text: "Custom Terminal" 
@@ -138,8 +155,9 @@ PluginSettings {
         }
 
         DankTextField {
+            id: customTerminalField
             width: parent.width
-            text: root.loadValue("customTerminal", "") 
+            text: root.loadValue("customTerminal", "")
             placeholderText: "my-terminal"
             onEditingFinished: {
                 root.saveValue("customTerminal", text);
@@ -170,13 +188,18 @@ PluginSettings {
         text: {
             var behavior = terminalBehaviorDropdown.currentValue;
             if (behavior === "newWindow") return "New Window: Opens a new terminal window for each session.";
-            if (behavior === "killExisting") return "Kill Existing: Kills any existing terminal before opening a new one.";
+            if (behavior === "killExisting") {
+                var exe = terminalDropdown.currentValue === "Custom"
+                    ? (customTerminalField.text || "your terminal")
+                    : terminalDropdown.currentValue;
+                return "Kill Existing: closes EVERY open " + exe + " window before launching (pkill -x " + exe + "), including windows not opened by this plugin. Unsaved work in them is lost.";
+            }
             if (behavior === "reuseSession") return "Reuse Session: Switches an existing tmux client to the new session. Falls back to new window if no client exists. (tmux only — Zellij always opens a new window.)";
             return "";
         }
         font.pixelSize: Theme.fontSizeSmall
         font.italic: true
-        color: Theme.surfaceVariantText
+        color: terminalBehaviorDropdown.currentValue === "killExisting" ? Theme.warning : Theme.surfaceVariantText
         wrapMode: Text.WordWrap
     }
 
@@ -229,7 +252,7 @@ PluginSettings {
     Column {
         width: parent.width
         visible: !noTriggerToggle.value
-        spacing: 5
+        spacing: Theme.spacingXS
 
         StyledText { 
             text: "Trigger" 
@@ -275,7 +298,7 @@ PluginSettings {
 
     Column {
         width: parent.width
-        spacing: 5
+        spacing: Theme.spacingXS
 
         StyledText {
             text: "Deletion Prefix"
@@ -324,7 +347,7 @@ PluginSettings {
 
     Column {
         width: parent.width
-        spacing: 5
+        spacing: Theme.spacingXS
 
         StyledText {
             text: "Max Results"

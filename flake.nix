@@ -1,5 +1,5 @@
 {
-  description = "DMS Sessionizer — DankMaterialShell launcher plugin";
+  description = "DMS Sessionizer — Dux Shell (DMS) launcher plugin";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -11,6 +11,7 @@
         "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+      manifest = builtins.fromJSON (builtins.readFile ./plugin.json);
     in
     {
       packages = forAllSystems (
@@ -20,8 +21,8 @@
         in
         {
           default = pkgs.stdenvNoCC.mkDerivation {
-            pname = "dms-plugin-dmsSessionizer";
-            version = "1.6.1";
+            pname = "dms-plugin-${manifest.id}";
+            version = manifest.version;
             src = self;
             dontConfigure = true;
             dontBuild = true;
@@ -33,8 +34,8 @@
               runHook postInstall
             '';
             meta = {
-              description = "Create tmux/Zellij sessions for your projects";
-              homepage = "https://github.com/LGBaracco/dms-sessionizer";
+              description = manifest.description;
+              homepage = "https://github.com/leonardofranco01/dms-sessionizer";
               platforms = pkgs.lib.platforms.all;
             };
           };

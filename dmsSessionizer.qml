@@ -213,6 +213,10 @@ QtObject {
         if (pluginService) {
             trigger = pluginService.loadPluginData("dmsSessionizer", "trigger", "tm");
             projectsDir = pluginService.loadPluginData("dmsSessionizer", "projectsDir", "");
+            if (String(pluginService.loadPluginData("dmsSessionizer", "projectsDirFormat", "1")) !== "2") {
+                projectsDir = migrateProjectsDir(projectsDir);
+                persist("projectsDirFormat", "2");
+            }
             terminal = pluginService.loadPluginData("dmsSessionizer", "terminal", "st");
             customTerminal = pluginService.loadPluginData("dmsSessionizer", "customTerminal", "");
             terminalBehavior = pluginService.loadPluginData("dmsSessionizer", "terminalBehavior", "newWindow");
@@ -306,6 +310,19 @@ QtObject {
         if (sessionExists)
             return "tmux attach-session -t " + escapeShellArg(sessionName);
         return "tmux new-session -As " + escapeShellArg(sessionName) + " -c " + escapeShellArg(projectPath);
+    }
+
+    // Before 1.6.1 every path was scanned for children; since then only paths ending in "/" are.
+    // Append "/" to pre-1.6.1 entries so they keep scanning. Twin of migrateProjectsDir in dmsSessionizerSettings.qml.
+    function migrateProjectsDir(value) {
+        var parts = String(value || "").split(/[,\n]+/);
+        var out = [];
+        for (var i = 0; i < parts.length; i++) {
+            var dir = parts[i].trim();
+            if (!dir) continue;
+            out.push(dir.charAt(dir.length - 1) === "/" ? dir : dir + "/");
+        }
+        return out.join(", ");
     }
 
     function getProjectsDirs() {
